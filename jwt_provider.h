@@ -40,36 +40,45 @@ char *load_private_key(char const* path) {
 char *get_jwt(char *private_key, char const *keyID, char const *appID) {
 
     jwt_t *jwt = NULL;
+    
+    // jwt_string will store the jwt later
+    char *jwt_string = NULL;
 
     if (jwt_new(&jwt) < 0) {
         perror("ERROR creating new JWT!");
-        return NULL;
+        goto error;
     }    
 
     json_t *json = json_object();
-    json_object_set(json, "userID", json_string("Janus"));
-    json_object_set(json, "keyID", json_string(keyID));
-    json_object_set(json, "appID", json_string(appID));
+    json_object_set_new(json, "userID", json_string("Janus"));
+    json_object_set_new(json, "keyID", json_string(keyID));
+    json_object_set_new(json, "appID", json_string(appID));
     char *json_stringified = json_dumps(json, JSON_INDENT(3));
 
     if(jwt_add_grants_json(jwt, json_stringified) != 0) {
         perror("ERROR adding grants!");
-        return NULL;
+        goto error;
     }
     
     if (jwt_set_alg(jwt, JWT_ALG_ES256, private_key, strlen(private_key))!= 0) {
         perror("ERROR! could not set algo."); 
-        return NULL;
+        goto error;
     }
 
-    char *jwt_string = jwt_encode_str(jwt);
+    jwt_string = jwt_encode_str(jwt);
     if (jwt_string == NULL) {
         perror("ERROR encoding JWT!");
-        return NULL;
+        goto error;
     }     
-
-    free(json_stringified);
-    jwt_free(jwt);
+   
+error: 
+    if (json_stringified)
+        free(json_stringified);
+    if (json) {
+        json_decref(json);
+    }
+    if (jwt)
+        jwt_free(jwt);
     
     // free the received string yourself
     return jwt_string;
