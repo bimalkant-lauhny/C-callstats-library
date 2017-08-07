@@ -1,6 +1,6 @@
 #include <sqlite3.h>
 
-static sqlite3 *db;
+static sqlite3 *db = NULL;
 static char *err_msg = NULL;
 
 struct user_info {
