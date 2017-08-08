@@ -19,6 +19,29 @@ char *to_string(long long num) {
 
 // event handlers
 
+void session_eventhandler(json_t *event) {
+    // extracting session_id
+    json_t *sid =  json_object_get(event, "session_id");
+    long long session_id = (long long) json_number_value(sid);
+    printf("session id : %lld\n", session_id);
+
+    //extracting event details from 'event'
+    json_t *event_key = json_object_get(event, "event");
+
+    // extracting event name ("attached" or "detached")    
+    json_t *evn = json_object_get(event_key, "name");
+    const char *event_name = json_string_value(evn);
+    printf("event name: %s\n", event_name);
+   
+    // if session is not created, return 
+    if (strcmp(event_name, "created") != 0) {
+        return; 
+    }
+    
+    // if session is created, get authentication token
+    auth_token =  authenticate("Janus");
+}
+
 void handle_eventhandler(json_t *event) {
     // never free json_t* we get from json_object_get(), since we receive a borrowed reference
     
@@ -84,9 +107,8 @@ void handle_eventhandler(json_t *event) {
         user.handle_id = to_string(handle_id);
 
         // storing user info in data store
-        initialize_db();
         insert_userinfo(&user);  
-    //    close_db();
+        
         // freeing up data after storing data is successfull
         free(user.conf_num);
         free(user.session_id);
@@ -135,10 +157,21 @@ void plugin_eventhandler(json_t *event) {
 
     // storing user info in data store
     size_t rc = add_user_num(session_id, handle_id, user_num);
-    close_db();
 
     free(session_id);
     free(handle_id);
     free(user_num);
 }
 
+void core_eventhandler(json_t *event) {
+    json_t *event_key = json_object_get(event, "event"); 
+    json_t *json_status = json_object_get(event_key, "status");
+    const char *status = json_string_value(json_status); 
+    if (strcmp(status, "started") == 0) {
+      // initializing database
+      initialize_db();
+    } else if (strcmp(status, "shutdown") == 0){
+      // closing database
+      close_db();
+    }
+}
