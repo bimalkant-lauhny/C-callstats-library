@@ -1,6 +1,23 @@
-// this file has mock tests for testing event_handlers.HACK
 #include <stdio.h>
 #include "event_handlers.h"
+
+json_t *get_core_event(const char *status) {
+    json_t *core = json_object();
+    json_object_set_new(core, "type", json_integer(256));
+    json_object_set_new(core, "timestamp", json_integer(1500625586169884));
+
+    json_t *event = json_object();
+    json_object_set_new(event, "status", json_string(status));
+
+    json_object_set_new(core, "event", event);
+    
+    char *temp = json_dumps(core, JSON_INDENT(3));
+    printf("Core Event created: %s\n", temp);
+    
+    free(temp);
+    return core;
+
+}
 
 json_t* get_handle_event() {
     json_t *handle = json_object();
@@ -33,11 +50,51 @@ json_t* get_handle_event() {
     return handle;
 }
 
+json_t* get_plugin_event() {
+    json_t *plugin= json_object();
+    json_object_set_new(plugin, "type", json_integer(64));
+    json_object_set_new(plugin, "timestamp", json_integer(1500625586169884));
+    json_object_set_new(plugin, "session_id", json_integer(96435475150506));
+    json_object_set_new(plugin, "handle_id", json_integer(4620600987866721));
+
+    json_t *event = json_object();
+    json_object_set_new(event, "plugin", json_string("janus.plugin.videoroom"));
+
+    json_t *data= json_object();
+    json_object_set_new(data, "event", json_string("joined"));
+    json_object_set_new(data, "room", json_integer(1234));
+    json_object_set_new(data, "id", json_integer(404525542925394));
+    json_object_set_new(data, "private_id", json_integer(981250313));
+    json_object_set_new(data, "display", json_string("bimal"));
+
+    json_object_set_new(event, "data", data);
+
+    json_object_set_new(plugin, "event", event);
+    
+    char *temp = json_dumps(plugin, JSON_INDENT(3));
+    printf("Plugin Event Created: %s\n", temp);
+    
+    free(temp);
+    return plugin;
+}
+
 int main(void) {
     
+    json_t *core = get_core_event("started");
+    core_eventhandler(core);
+    json_decref(core);
+
     json_t *handle = get_handle_event();
     handle_eventhandler(handle);
     json_decref(handle);
+
+    json_t *plugin = get_plugin_event();
+    plugin_eventhandler(plugin);
+    json_decref(plugin);
+    
+    core = get_core_event("shutdown");
+    core_eventhandler(core);
+    json_decref(core);
 
     return 0;
 }
