@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "event_handlers.h"
+#include "../event_handlers.h"
 
 json_t *get_core_event(const char *status) {
     json_t *core = json_object();
@@ -83,6 +83,7 @@ int main(void) {
     json_t *core = get_core_event("started");
     core_eventhandler(core);
     json_decref(core);
+    core = NULL;
 
     json_t *handle = get_handle_event();
     handle_eventhandler(handle);

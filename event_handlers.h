@@ -39,7 +39,6 @@ void session_eventhandler(json_t *event) {
     }
     
     // if session is created, get authentication token
-    auth_token =  authenticate("Janus");
 }
 
 void handle_eventhandler(json_t *event) {
