@@ -16,7 +16,24 @@ json_t *get_core_event(const char *status) {
     
     free(temp);
     return core;
+}
 
+json_t *get_session_event(const char *event_name) {
+    json_t *session = json_object();
+    json_object_set_new(session, "type", json_integer(256));
+    json_object_set_new(session, "timestamp", json_integer(1500625586169884));
+    json_object_set_new(session, "session_id", json_integer(96435475150506));
+
+    json_t *event = json_object();
+    json_object_set_new(event, "name", json_string(event_name));
+
+    json_object_set_new(session, "event", event);
+    
+    char *temp = json_dumps(session, JSON_INDENT(3));
+    printf("Session Event created: %s\n", temp);
+    
+    free(temp);
+    return session;
 }
 
 json_t* get_handle_event() {
@@ -85,6 +102,11 @@ int main(void) {
     json_decref(core);
     core = NULL;
 
+    json_t *session = get_session_event("created");
+    session_eventhandler(session);
+    json_decref(session);
+    session = NULL;
+    
     json_t *handle = get_handle_event();
     handle_eventhandler(handle);
     json_decref(handle);
@@ -92,7 +114,11 @@ int main(void) {
     json_t *plugin = get_plugin_event();
     plugin_eventhandler(plugin);
     json_decref(plugin);
-    
+
+    session = get_session_event("destroyed");
+    session_eventhandler(session);
+    json_decref(session);
+
     core = get_core_event("shutdown");
     core_eventhandler(core);
     json_decref(core);
