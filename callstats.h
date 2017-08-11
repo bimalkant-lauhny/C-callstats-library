@@ -1,20 +1,25 @@
-/* \file callstats.h
- * \author Bimalkant Lauhny <lauhny.bimalk@gmail.com>
- * \copyright
- * \brief header file defining functions for sending events to callstast.io REST
- * API.
+/*! \file    callstats.h
+ * \author   Bimalkant Lauhny <lauhny.bimalk@gmail.com>
+ * \copyright MIT License
+ * \brief    Methods for sending data to callstats.io REST API
+ * using sqlite3
  */
 
 #include <string.h>
 #include <curl/curl.h>
 #include <jansson.h>
 #include <jwt.h>
+#include "jwt_provider.h"
 
 #define CALLSTATS_REST_API_VERSION 1.0.0
+#define BUFFER_SIZE  (10 * 1024)  /* 10 KB */
+#define KEY_ID "b3d2b1b225766cefad" 
+#define APP_ID "418185852"
+#define PRIVATE_KEY_PATH "ssl/ecpriv.key"
 
-#define BUFFER_SIZE  (256 * 1024)  /* 256 KB */
+// function prototypes
 
-// helper types and functions for manipulation curl response
+// authentication
 
 struct write_result {
     char *data;
@@ -38,22 +43,32 @@ static size_t write_response(void *ptr, size_t size, size_t nmemb, void *stream)
     return size * nmemb;
 }
 
+// function definitions
+char *callstats_authenticate(char *user_id) {
+    // getting private key
+    char *private_key = jwt_load_private_key(PRIVATE_KEY_PATH);
+    if (private_key == NULL) {
+        perror("ERROR reading private_key!");
+        goto error;
+    }
+    // generating Json Web Token
+    char *jwt_string = jwt_get_token(private_key, KEY_ID, APP_ID, user_id);
+    if (jwt_string == NULL) {
+        perror("ERROR generating token!");
+        goto error;
+    }
+    printf("Recieved JWT: %s\n", jwt_string);
 
-// authentication function returning access_token
-
-char *authenticate(const char *url, char *jwt, const char *app_id) {
+    const char* url = "https://auth.callstats.io/authenticate";
     CURL *curl = NULL;
     CURLcode status;
     struct curl_slist *headers = NULL;
     char *data = NULL;
     long code;
-    // val will later store access_token
-    char *val = NULL;
+    
     json_error_t err;
     // response will later store server's response
     json_t *response = NULL;
-    // access_token will later store 'access_token' field of response object received from server
-    json_t *access_token = NULL;
 
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
@@ -77,12 +92,13 @@ char *authenticate(const char *url, char *jwt, const char *app_id) {
     headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
      // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    // formFormat
-    char *formFormat= "grant_type=authorization_code&code=%s&client_id=Janus@%s";
-    // formDataBuffer 
-    char formDataBuffer [BUFFER_SIZE];
-    snprintf(formDataBuffer, sizeof(formDataBuffer), formFormat, jwt,  app_id);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, formDataBuffer);
+    // form format
+    char *form_format= "grant_type=authorization_code&code=%s&client_id=%s@%s";
+    // form data buffer 
+    char form_data_buffer [BUFFER_SIZE];
+    snprintf(form_data_buffer, sizeof(form_data_buffer), form_format, jwt_string, user_id, APP_ID);
+    printf("Form Data Buffer: %s\n", form_data_buffer);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, form_data_buffer);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_response);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
     // perform request
@@ -109,15 +125,17 @@ char *authenticate(const char *url, char *jwt, const char *app_id) {
       goto error;
     }
 
-    access_token = json_object_get(response, "access_token");
+    json_t *json_access_token = json_object_get(response, "access_token");
 
-    if (access_token == NULL) {
+    if (json_access_token == NULL) {
       perror("ERROR");
       goto error;
     }
 
-    val = (char*) json_string_value(access_token);
-    access_token = NULL;
+    const char *val = json_string_value(json_access_token);
+    char *access_token = (char *) malloc(strlen(val) + 1);
+    strcpy(access_token, val);
+    printf("Access Token Converted: %s\n", access_token);
 
 error:
     if (response) 
@@ -129,6 +147,129 @@ error:
     if(headers)
         curl_slist_free_all(headers);
     curl_global_cleanup();
+    if (jwt_string)
+        free(jwt_string);
+    if (private_key)
+        free(private_key);
 
-    return val;
+    return access_token;
+}
+
+char *callstats_user_joined (user_info *user, long long timestamp) {
+    // preparing url for posting payload
+    char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s";
+    char url_buffer[BUFFER_SIZE];
+    snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id);
+    printf("callstats_user_joined Buffer: %s\n", url_buffer);
+        
+    // preparing payload
+    json_t *json_payload = json_object();
+    json_object_set_new(json_payload, "localID", json_string(user->user_id));
+    json_object_set_new(json_payload, "deviceID", json_string(user->device_id));
+    json_object_set_new(json_payload, "timestamp", json_real(timestamp/1000.0));
+    json_t *endpoint_info = json_object();
+    json_object_set_new(endpoint_info, "type", json_string("middlebox"));
+    json_object_set_new(endpoint_info, "buildVersion", json_string("Janus 0.2.3"));
+    json_object_set_new(endpoint_info, "appVersion", json_string("Jangouts 0.4.6"));
+    json_object_set_new(json_payload, "endpointInfo", endpoint_info);
+        
+    // stringifying payload
+    char *string_payload = json_dumps(json_payload, 0); 
+    printf("user joined payload: %s \n", string_payload);
+    
+    CURL *curl = NULL;                                      
+    CURLcode status;
+    struct curl_slist *headers = NULL;
+    char *data = NULL;
+    long code = 0;
+    
+    json_error_t err;
+    // response will later store server's response
+    json_t *response = NULL;
+     
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    if(!curl)
+        goto error;
+     
+    data = malloc(BUFFER_SIZE);
+    if(!data)
+        goto error;
+     
+    write_result res = {
+        .data = data,
+        .pos = 0
+    };
+
+    // set url
+    curl_easy_setopt(curl, CURLOPT_URL, url_buffer);
+    // set HTTP version
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE);
+    // append headers
+    headers = curl_slist_append(headers, "Accept: application/json"); 
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    char *auth_format = "Authorization: Bearer %s";
+    char auth_string[BUFFER_SIZE];
+    snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
+    printf("authorization: %s\n", auth_string);
+    headers = curl_slist_append(headers, auth_string);
+    // set headers
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    // form format
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, string_payload);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(string_payload+1));
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_response);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
+    // perform request
+    status = curl_easy_perform(curl);
+    if(status != 0){
+        fprintf(stderr, "error: unable to request data from %s:\n", url_buffer);
+        fprintf(stderr, "HEY::: %s\n", curl_easy_strerror(status));
+        goto error;
+    }
+
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+    if(code != 200) {
+        fprintf(stderr, "error: server responded with code %ld\n", code);
+        goto error;
+    }
+
+    // zero-terminate the result
+    data[res.pos] = '\0';
+
+    response = json_loads(data, 0, &err);
+
+    if (response == NULL) {
+        fprintf(stderr, "JSON parsing error!");
+        goto error;
+    }
+
+    json_t *json_uc_id = json_object_get(response, "uc_id");
+
+    if (json_uc_id == NULL) {
+        perror("ERROR");
+        goto error;
+    }
+
+    const char *str_uc_id = json_string_value(json_uc_id);
+    char *uc_id = (char *) malloc(strlen(str_uc_id) + 1);
+    strcpy(uc_id, str_uc_id);
+    printf("Received uc_id: %s\n", uc_id);
+
+    error:
+    if (response) 
+        json_decref(response);
+    if(data)
+        free(data);
+    if(curl)
+        curl_easy_cleanup(curl);
+    if(headers)
+        curl_slist_free_all(headers);
+    curl_global_cleanup();
+    if (string_payload)
+        free(string_payload);
+    if (json_payload)
+        json_decref(json_payload);
+    
+    return uc_id;
 }
