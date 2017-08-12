@@ -205,7 +205,6 @@ void plugin_eventhandler(json_t *event) {
     const char *event_name = json_string_value(evn);
     printf("event name: %s\n", event_name);
     
-    // if not 'joined' event, leave
     if (strcmp(event_name, "joined") == 0) {
         // extracting 'user_num'
         json_t *unum = json_object_get(data, "id");
@@ -214,9 +213,15 @@ void plugin_eventhandler(json_t *event) {
         char *user_num = to_string(usr_num);
 
         // storing user info in data store
+        // def - data_store.h
         size_t rc = add_user_num(session_id, handle_id, user_num);
+        if (rc != 0) {
+            printf("ERROR: Failed adding user_num!\n");
+        }
         free(user_num);
         user_info user;
+        // initializing user fields with NULL
+        // def - data_store.h
         initialize_user_info(&user);
         
         //fetch user info for a combination of session_id and handle_id from data store
@@ -236,7 +241,9 @@ void plugin_eventhandler(json_t *event) {
         free_user_info(&user);
         
     } else if (strcmp(event_name, "unpublished") == 0) {
-        
+        // user has left, delete the related info in database
+        // def - data_store.h
+        remove_user(session_id, handle_id);
     }
 
     free(session_id);

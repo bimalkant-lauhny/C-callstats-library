@@ -251,6 +251,23 @@ size_t get_user_info(char *session_id, char *handle_id, user_info *user) {
     return 0;
 }
 
+size_t remove_user(char *session_id, char *handle_id) {
+    const char *sql = "DELETE FROM Stats_Info "
+                      "WHERE session_id='%s' AND handle_id='%s';";
+    char sql_buffer[BUFFER_SIZE_SQLITE];
+    snprintf(sql_buffer, sizeof(sql_buffer), sql, 
+             session_id, handle_id);
+    printf("Buffer: %s\n", sql_buffer);
+    size_t rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
+    if (rc != SQLITE_OK ) {
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+        sqlite3_free(err_msg);        
+        sqlite3_close(db);
+        return -1;
+    } 
+    return 0; 
+}
+
 size_t close_db() {
     sqlite3_free(err_msg);
     size_t rc = sqlite3_close(db);
