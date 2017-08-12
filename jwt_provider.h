@@ -1,13 +1,20 @@
+/*! \file    jwt_provider.h
+ * \author   Bimalkant Lauhny <lauhny.bimalk@gmail.com>
+ * \copyright MIT License
+ * \brief    Helper methods for generating a JSON WebToken
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <jwt.h>
 #include <jansson.h>
 
-char *load_private_key(char const*);
-char *get_jwt(char *, char const *, char const *);
+// function prototypes
+char *jwt_load_private_key(char const*);
+char *jwt_get_token(char *, char const *, char const *, char *);
 
-char *load_private_key(char const* path) {
+// function definitions
+char *jwt_load_private_key(char const* path) {
     long length;
     FILE * fp = fopen (path, "rb"); //was "rb"
     // failed opening file
@@ -30,14 +37,12 @@ char *load_private_key(char const* path) {
         perror("ERROR! failed closing private key file.");
         return NULL;
     }
-
     buffer[length] = '\0';
-
     // free the received string yourself
     return buffer;
 }
 
-char *get_jwt(char *private_key, char const *keyID, char const *appID) {
+char *jwt_get_token(char *private_key, char const *key_id, char const *app_id, char *user_id) {
 
     jwt_t *jwt = NULL;
     
@@ -50,9 +55,9 @@ char *get_jwt(char *private_key, char const *keyID, char const *appID) {
     }    
 
     json_t *json = json_object();
-    json_object_set_new(json, "userID", json_string("Janus"));
-    json_object_set_new(json, "keyID", json_string(keyID));
-    json_object_set_new(json, "appID", json_string(appID));
+    json_object_set_new(json, "userID", json_string(user_id));
+    json_object_set_new(json, "keyID", json_string(key_id));
+    json_object_set_new(json, "appID", json_string(app_id));
     char *json_stringified = json_dumps(json, JSON_INDENT(3));
 
     if(jwt_add_grants_json(jwt, json_stringified) != 0) {

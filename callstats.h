@@ -10,16 +10,18 @@
 #include <jansson.h>
 #include <jwt.h>
 #include "jwt_provider.h"
+#include "config.h"
 
 #define CALLSTATS_REST_API_VERSION 1.0.0
 #define BUFFER_SIZE  (10 * 1024)  /* 10 KB */
-#define KEY_ID "b3d2b1b225766cefad" 
-#define APP_ID "418185852"
-#define PRIVATE_KEY_PATH "ssl/ecpriv.key"
 
 // function prototypes
+static size_t write_response(void *, size_t, size_t, void *);
+char *callstats_authenticate(char *);
+char *callstats_user_joined (user_info *, long long);
 
-// authentication
+
+// function definitions
 
 struct write_result {
     char *data;
@@ -44,6 +46,7 @@ static size_t write_response(void *ptr, size_t size, size_t nmemb, void *stream)
 }
 
 // function definitions
+
 char *callstats_authenticate(char *user_id) {
     // getting private key
     char *private_key = jwt_load_private_key(PRIVATE_KEY_PATH);
@@ -51,6 +54,7 @@ char *callstats_authenticate(char *user_id) {
         perror("ERROR reading private_key!");
         goto error;
     }
+    
     // generating Json Web Token
     char *jwt_string = jwt_get_token(private_key, KEY_ID, APP_ID, user_id);
     if (jwt_string == NULL) {
@@ -93,7 +97,7 @@ char *callstats_authenticate(char *user_id) {
      // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     // form format
-    char *form_format= "grant_type=authorization_code&code=%s&client_id=%s@%s";
+    const char *form_format= "grant_type=authorization_code&code=%s&client_id=%s@%s";
     // form data buffer 
     char form_data_buffer [BUFFER_SIZE];
     snprintf(form_data_buffer, sizeof(form_data_buffer), form_format, jwt_string, user_id, APP_ID);
@@ -157,7 +161,7 @@ error:
 
 char *callstats_user_joined (user_info *user, long long timestamp) {
     // preparing url for posting payload
-    char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s";
+    const char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s";
     char url_buffer[BUFFER_SIZE];
     snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id);
     printf("callstats_user_joined Buffer: %s\n", url_buffer);
@@ -174,7 +178,7 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     json_object_set_new(json_payload, "endpointInfo", endpoint_info);
         
     // stringifying payload
-    char *string_payload = json_dumps(json_payload, 0); 
+    char *string_payload = json_dumps(json_payload, JSON_PRESERVE_ORDER); 
     printf("user joined payload: %s \n", string_payload);
     
     CURL *curl = NULL;                                      
@@ -204,11 +208,11 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     // set url
     curl_easy_setopt(curl, CURLOPT_URL, url_buffer);
     // set HTTP version
-    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE);
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
     // append headers
-    headers = curl_slist_append(headers, "Accept: application/json"); 
+    headers = curl_slist_append(headers, "Accept: application/json");
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    char *auth_format = "Authorization: Bearer %s";
+    const char *auth_format = "Authorization: Bearer %s";
     char auth_string[BUFFER_SIZE];
     snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
     printf("authorization: %s\n", auth_string);
@@ -216,6 +220,7 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     // form format
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, string_payload);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(string_payload+1));
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_response);
@@ -253,6 +258,10 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
 
     const char *str_uc_id = json_string_value(json_uc_id);
     char *uc_id = (char *) malloc(strlen(str_uc_id) + 1);
+    if (uc_id == NULL) {
+       printf("ERROR: Could not allocate memory! Leaving user_joined."); 
+       goto error;
+    }
     strcpy(uc_id, str_uc_id);
     printf("Received uc_id: %s\n", uc_id);
 

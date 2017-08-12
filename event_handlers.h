@@ -13,7 +13,24 @@
 
 #define BUFFER_SIZE_EVH 100 
 
-// helper functions
+// helper functions prototypes
+
+char *to_string(long long);
+char *without_spaces(char *);
+
+// event handler function prototypes
+
+void session_eventhandler(json_t *);
+void handle_eventhandler(json_t *);
+void jsep_eventhandler(json_t *);
+void webrtc_eventhandler(json_t *);
+void media_eventhandler(json_t *);
+void plugin_eventhandler(json_t *);
+void transport_eventhandler(json_t *);
+void core_eventhandler(json_t *);
+
+
+// helper functions definitions
 
 // a function to convert a number to string
 char *to_string(long long num) {
@@ -47,7 +64,7 @@ char *without_spaces(char *old_str) {
     return new_str;
 }
 
-// event handlers
+// event handler definitions
 
 // event handler for 'session' events (type: 1)
 void session_eventhandler(json_t *event) {

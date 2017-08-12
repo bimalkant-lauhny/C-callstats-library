@@ -7,6 +7,7 @@
 
 #include <sqlite3.h>
 #include <stdio.h>
+#include "config.h"
 
 #define BUFFER_SIZE_SQLITE 10*1024
 
@@ -30,6 +31,20 @@ struct user_info {
 };
 
 typedef struct user_info user_info;
+
+// function prototypes
+void initialize_user_info(user_info *user);
+void free_user_info(user_info *user);
+size_t initialize_db(void);
+size_t insert_userinfo(user_info *);
+size_t add_token(char *, char *, char *);
+size_t add_user_num(char *, char *, char *);
+size_t get_user_info(char *, char *, user_info *);
+size_t remove_user(char *, char *);
+size_t close_db(void);
+
+
+//function definitions    
 
 void initialize_user_info(user_info *user) {
     user->user_num= NULL;
@@ -63,11 +78,11 @@ void free_user_info(user_info *user) {
     free(user->token);
 }
 
-size_t initialize_db() {
+size_t initialize_db(void) {
     if (db != NULL) {
         return 0;
     }
-    size_t rc = sqlite3_open("test.db", &db); 
+    size_t rc = sqlite3_open(DB_PATH, &db); 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
         sqlite3_free(err_msg);
@@ -75,7 +90,7 @@ size_t initialize_db() {
         return -1;
     }
     
-    char *sql = "DROP TABLE IF EXISTS Stats_Info;"
+    const char *sql = "DROP TABLE IF EXISTS Stats_Info;"
                 "CREATE TABLE Stats_Info(user_num TEXT," 
                                          "user_id TEXT," 
                                          "conf_num TEXT," 
@@ -101,7 +116,7 @@ size_t initialize_db() {
 }
 
 size_t insert_userinfo(user_info *user) {
-    char *sql = "INSERT INTO Stats_Info VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');";
+    const char *sql = "INSERT INTO Stats_Info VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
             (user->user_num)?user->user_num:"NULL",
@@ -125,11 +140,11 @@ size_t insert_userinfo(user_info *user) {
         sqlite3_close(db);
         return -1;
     } 
-    return 1; 
+    return 0; 
 }
 
 size_t add_token(char *session_id, char *handle_id, char *token) {
-    char *sql = "UPDATE Stats_Info SET token='%s' "
+    const char *sql = "UPDATE Stats_Info SET token='%s' "
         "WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
@@ -142,11 +157,11 @@ size_t add_token(char *session_id, char *handle_id, char *token) {
         sqlite3_close(db);
         return -1;
     } 
-    return 1; 
+    return 0; 
 }
 
 size_t add_user_num(char *session_id, char *handle_id, char *user_num) {
-    char *sql = "UPDATE Stats_Info SET user_num='%s' "
+    const char *sql = "UPDATE Stats_Info SET user_num='%s' "
         "WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
@@ -159,11 +174,11 @@ size_t add_user_num(char *session_id, char *handle_id, char *user_num) {
         sqlite3_close(db);
         return -1;
     } 
-    return 1; 
+    return 0; 
 }
 
 size_t get_user_info(char *session_id, char *handle_id, user_info *user) {
-    char *sql = "SELECT * FROM Stats_Info WHERE session_id='%s' AND handle_id='%s';";
+    const char *sql = "SELECT * FROM Stats_Info WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
             session_id, handle_id);
@@ -268,8 +283,13 @@ size_t remove_user(char *session_id, char *handle_id) {
     return 0; 
 }
 
-size_t close_db() {
-    sqlite3_free(err_msg);
+size_t close_db(void) {
     size_t rc = sqlite3_close(db);
+    if (rc != SQLITE_OK ) {
+        sqlite3_free(err_msg);
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+        return -1;
+    } 
+    sqlite3_free(err_msg);
     return 0;
 }
