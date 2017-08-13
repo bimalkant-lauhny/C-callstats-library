@@ -211,6 +211,10 @@ void plugin_eventhandler(json_t *event) {
     printf("handle id : %lld\n", hand_id);
     char *handle_id = to_string(hand_id);
     
+    // extracting timestamp 
+    json_t *t_stamp = json_object_get(event, "timestamp");
+    long long timestamp = (long long) json_number_value(t_stamp);
+        
     //extracting event details from 'event'
     json_t *event_key = json_object_get(event, "event");
 
@@ -245,19 +249,37 @@ void plugin_eventhandler(json_t *event) {
         // def - data_store.h
         get_user_info(session_id, handle_id, &user);
             
-        // extracting timestamp to send to callstats_user_joined
-        json_t *t_stamp = json_object_get(event, "timestamp");
-        long long timestamp = (long long) json_number_value(t_stamp);
-        
         // send user-join request to callstats REST API
         // def - callstats.h
         char *uc_id  = callstats_user_joined(&user, timestamp);
         free(uc_id);
+        
         // free the memory allocated to user info in 'user'
         // def - data_store.h
         free_user_info(&user);
         
     } else if (strcmp(event_name, "unpublished") == 0) {
+        user_info user;
+        // initializing user fields with NULL
+        // def - data_store.h
+        initialize_user_info(&user);
+        
+        //fetch user info for a combination of session_id and handle_id from data store
+        // def - data_store.h
+        get_user_info(session_id, handle_id, &user);
+            
+        // send user-left request to callstats REST API
+        // def - callstats.h
+        size_t status = callstats_user_left(&user, timestamp);
+        if (status == 0) {
+            printf("Successfully sent user left.\n");
+        } else {
+            printf("user left request unsuccessful!.\n");
+        }
+        // free the memory allocated to user info in 'user'
+        // def - data_store.h
+        free_user_info(&user);
+        
         // user has left, delete the related info in database
         // def - data_store.h
         remove_user(session_id, handle_id);
@@ -284,4 +306,3 @@ void core_eventhandler(json_t *event) {
       close_db();
     }
 }
-

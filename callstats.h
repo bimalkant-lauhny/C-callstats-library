@@ -19,7 +19,7 @@
 static size_t write_response(void *, size_t, size_t, void *);
 char *callstats_authenticate(char *);
 char *callstats_user_joined (user_info *, long long);
-
+size_t callstats_user_left(user_info *, long long);
 
 // function definitions
 
@@ -173,13 +173,14 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     json_object_set_new(json_payload, "timestamp", json_real(timestamp/1000.0));
     json_t *endpoint_info = json_object();
     json_object_set_new(endpoint_info, "type", json_string("middlebox"));
-    json_object_set_new(endpoint_info, "buildVersion", json_string("Janus 0.2.3"));
-    json_object_set_new(endpoint_info, "appVersion", json_string("Jangouts 0.4.6"));
+    json_object_set_new(endpoint_info, "buildName", json_string("Janus"));
+    json_object_set_new(endpoint_info, "buildVersion", json_string(JANUS_VERSION));
+    json_object_set_new(endpoint_info, "appVersion", json_string(JANGOUTS_VERSION));
     json_object_set_new(json_payload, "endpointInfo", endpoint_info);
         
     // stringifying payload
-    char *string_payload = json_dumps(json_payload, JSON_PRESERVE_ORDER); 
-    printf("user joined payload: %s \n", string_payload);
+    char *string_payload = json_dumps(json_payload, JSON_ENCODE_ANY); 
+    printf("user_joined payload: %s \n", string_payload);
     
     CURL *curl = NULL;                                      
     CURLcode status;
@@ -209,6 +210,12 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     curl_easy_setopt(curl, CURLOPT_URL, url_buffer);
     // set HTTP version
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+    // set key and certificate
+    curl_easy_setopt(curl, CURLOPT_SSLCERTTYPE, "PEM");
+    curl_easy_setopt(curl, CURLOPT_SSLCERT, SERVER_CERT_PATH);
+    curl_easy_setopt(curl, CURLOPT_SSLKEYTYPE, "PEM");
+    curl_easy_setopt(curl, CURLOPT_SSLKEY, SERVER_KEY_PATH);
+    
     // append headers
     headers = curl_slist_append(headers, "Accept: application/json");
     headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -228,19 +235,21 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     // perform request
     status = curl_easy_perform(curl);
     if(status != 0){
-        fprintf(stderr, "error: unable to request data from %s:\n", url_buffer);
-        fprintf(stderr, "HEY::: %s\n", curl_easy_strerror(status));
-        goto error;
-    }
-
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-    if(code != 200) {
-        fprintf(stderr, "error: server responded with code %ld\n", code);
+        fprintf(stderr, "ERROR: unable to request data from %s:\n", url_buffer);
+        fprintf(stderr, "ERROR:%s\n", curl_easy_strerror(status));
         goto error;
     }
 
     // zero-terminate the result
     data[res.pos] = '\0';
+    printf("user_joined response: %s\n", data);
+    
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+    if(code != 200) {
+        fprintf(stderr, "ERROR: server responded with code %ld\n", code);
+        goto error;
+    }
+
 
     response = json_loads(data, 0, &err);
 
@@ -266,6 +275,7 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     printf("Received uc_id: %s\n", uc_id);
 
     error:
+    
     if (response) 
         json_decref(response);
     if(data)
@@ -282,3 +292,136 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     
     return uc_id;
 }
+
+size_t callstats_user_left(user_info *user, long long timestamp) {
+    // preparing url for posting payload
+    
+    const char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s/%s/events/user/left";
+    char url_buffer[BUFFER_SIZE];
+    snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id, user->uc_id);
+    printf("callstats_user_left Buffer: %s\n", url_buffer);
+        
+    // preparing payload
+    json_t *json_payload = json_object();
+    json_object_set_new(json_payload, "localID", json_string(user->user_id));
+    json_object_set_new(json_payload, "deviceID", json_string(user->device_id));
+    json_object_set_new(json_payload, "timestamp", json_real(timestamp/1000.0));
+        
+    // stringifying payload
+    char *string_payload = json_dumps(json_payload, JSON_ENCODE_ANY); 
+    printf("user_left payload: %s \n", string_payload);
+    
+    CURL *curl = NULL;                                      
+    CURLcode status;
+    struct curl_slist *headers = NULL;
+    char *data = NULL;
+    long code = 0;
+    
+    // msg=0 means success, msg!=0 means failure
+    size_t msg = 1;
+    
+    json_error_t err;
+    
+    // response will later store server's response
+    json_t *response = NULL;
+     
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    if(!curl)
+        goto error;
+     
+    data = malloc(BUFFER_SIZE);
+    if(!data)
+        goto error;
+     
+    write_result res = {
+        .data = data,
+        .pos = 0
+    };
+
+    // set url
+    curl_easy_setopt(curl, CURLOPT_URL, url_buffer);
+    // set HTTP version
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+    // set key and certificate
+    curl_easy_setopt(curl, CURLOPT_SSLCERTTYPE, "PEM");
+    curl_easy_setopt(curl, CURLOPT_SSLCERT, SERVER_CERT_PATH);
+    curl_easy_setopt(curl, CURLOPT_SSLKEYTYPE, "PEM");
+    curl_easy_setopt(curl, CURLOPT_SSLKEY, SERVER_KEY_PATH);
+    
+    // append headers
+    headers = curl_slist_append(headers, "Accept: application/json");
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    const char *auth_format = "Authorization: Bearer %s";
+    char auth_string[BUFFER_SIZE];
+    snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
+    printf("authorization: %s\n", auth_string);
+    headers = curl_slist_append(headers, auth_string);
+    // set headers
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    // form format
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, string_payload);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(string_payload+1));
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_response);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
+    // perform request
+    status = curl_easy_perform(curl);
+    if(status != 0){
+        fprintf(stderr, "ERROR: unable to request data from %s:\n", url_buffer);
+        fprintf(stderr, "ERROR: %s\n", curl_easy_strerror(status));
+        goto error;
+    }
+
+    // zero-terminate the result
+    data[res.pos] = '\0';
+    printf("user_left Response: %s\n", data);
+    
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+    if(code != 200) {
+        fprintf(stderr, "ERROR: server responded with code %ld\n", code);
+        goto error;
+    }
+
+    response = json_loads(data, 0, &err);
+
+    if (response == NULL) {
+        fprintf(stderr, "JSON parsing error!");
+        goto error;
+    }
+
+    json_t *json_status = json_object_get(response, "status");
+
+    if (json_status == NULL) {
+        perror("ERROR");
+        goto error;
+    }
+
+    const char *result = json_string_value(json_status);
+    if (result == NULL) {
+       printf("ERROR: Cannot get 'success' key! Leaving user_left."); 
+       goto error;
+    }
+    
+    if (strcmp(result , "success") == 0) {
+       msg = 0; 
+    }
+    
+    error:
+    
+    if (string_payload)
+        free(string_payload);
+    if (json_payload)
+        json_decref(json_payload);
+    if (response) 
+        json_decref(response);
+    if(data)
+        free(data);
+    if(curl)
+        curl_easy_cleanup(curl);
+    if(headers)
+        curl_slist_free_all(headers);
+    curl_global_cleanup();
+    
+    return msg;
+}   
