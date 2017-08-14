@@ -160,6 +160,23 @@ size_t add_token(char *session_id, char *handle_id, char *token) {
     return 0; 
 }
 
+size_t add_uc_id(char *session_id, char *handle_id, char *uc_id) {
+    const char *sql = "UPDATE Stats_Info SET uc_id='%s' "
+        "WHERE session_id='%s' AND handle_id='%s';";
+    char sql_buffer[BUFFER_SIZE_SQLITE];
+    snprintf(sql_buffer, sizeof(sql_buffer), sql, 
+            uc_id, session_id, handle_id);
+    printf("Buffer: %s\n", sql_buffer);
+    size_t rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
+    if (rc != SQLITE_OK ) {
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+        sqlite3_free(err_msg);        
+        sqlite3_close(db);
+        return -1;
+    } 
+    return 0; 
+}
+
 size_t add_user_num(char *session_id, char *handle_id, char *user_num) {
     const char *sql = "UPDATE Stats_Info SET user_num='%s' "
         "WHERE session_id='%s' AND handle_id='%s';";

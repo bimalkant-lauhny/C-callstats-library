@@ -233,7 +233,7 @@ void plugin_eventhandler(json_t *event) {
         printf("user num : %lld\n", usr_num);
         char *user_num = to_string(usr_num);
 
-        // storing user info in data store
+        // storing user_num in data store
         // def - data_store.h
         size_t rc = add_user_num(session_id, handle_id, user_num);
         if (rc != 0) {
@@ -252,6 +252,13 @@ void plugin_eventhandler(json_t *event) {
         // send user-join request to callstats REST API
         // def - callstats.h
         char *uc_id  = callstats_user_joined(&user, timestamp);
+        
+        // Adding uc_id to data store
+        // def - data-store.h
+        rc = add_uc_id(session_id, handle_id, uc_id);
+        if (rc != 0) {
+            printf("ERROR: Failed adding uc_id!\n");
+        }
         free(uc_id);
         
         // free the memory allocated to user info in 'user'
@@ -306,3 +313,4 @@ void core_eventhandler(json_t *event) {
       close_db();
     }
 }
+
