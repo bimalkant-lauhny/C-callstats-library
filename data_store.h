@@ -35,13 +35,13 @@ typedef struct user_info user_info;
 // function prototypes
 void initialize_user_info(user_info *user);
 void free_user_info(user_info *user);
-size_t initialize_db(void);
-size_t insert_userinfo(user_info *);
-size_t add_token(char *, char *, char *);
-size_t add_user_num(char *, char *, char *);
-size_t get_user_info(char *, char *, user_info *);
-size_t remove_user(char *, char *);
-size_t close_db(void);
+gboolean initialize_db(void);
+gboolean insert_userinfo(user_info *);
+gboolean add_token(char *, char *, char *);
+gboolean add_user_num(char *, char *, char *);
+gint8 get_user_info(char *, char *, user_info *);
+gboolean remove_user(char *, char *);
+gboolean close_db(void);
 
 
 //function definitions    
@@ -78,16 +78,16 @@ void free_user_info(user_info *user) {
     free(user->token);
 }
 
-size_t initialize_db(void) {
+gboolean initialize_db(void) {
     if (db != NULL) {
         return 0;
     }
-    size_t rc = sqlite3_open(DB_PATH, &db); 
+    gint8 rc = sqlite3_open(DB_PATH, &db); 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
         sqlite3_free(err_msg);
         sqlite3_close(db);
-        return -1;
+        return FALSE;
     }
     
     const char *sql = "DROP TABLE IF EXISTS Stats_Info;"
@@ -110,12 +110,12 @@ size_t initialize_db(void) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
         sqlite3_free(err_msg);        
         sqlite3_close(db);
-        return -1;
+        return FALSE;
     } 
-    return 0;
+    return TRUE;
 }
 
-size_t insert_userinfo(user_info *user) {
+gboolean insert_userinfo(user_info *user) {
     const char *sql = "INSERT INTO Stats_Info VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
@@ -133,75 +133,75 @@ size_t insert_userinfo(user_info *user) {
             (user->uc_id)?user->uc_id:"NULL",
             (user->token)?user->token:"NULL");
     printf("Buffer: %s\n", sql_buffer);
-    size_t rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
+    gint8 rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
     if (rc != SQLITE_OK ) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
         sqlite3_free(err_msg);        
         sqlite3_close(db);
-        return -1;
+        return FALSE;
     } 
-    return 0; 
+    return TRUE; 
 }
 
-size_t add_token(char *session_id, char *handle_id, char *token) {
+gboolean add_token(char *session_id, char *handle_id, char *token) {
     const char *sql = "UPDATE Stats_Info SET token='%s' "
         "WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
             token, session_id, handle_id);
     printf("Buffer: %s\n", sql_buffer);
-    size_t rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
+    gint8 rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
     if (rc != SQLITE_OK ) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
         sqlite3_free(err_msg);        
         sqlite3_close(db);
-        return -1;
+        return FALSE;
     } 
-    return 0; 
+    return TRUE; 
 }
 
-size_t add_uc_id(char *session_id, char *handle_id, char *uc_id) {
+gboolean add_uc_id(char *session_id, char *handle_id, char *uc_id) {
     const char *sql = "UPDATE Stats_Info SET uc_id='%s' "
         "WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
             uc_id, session_id, handle_id);
     printf("Buffer: %s\n", sql_buffer);
-    size_t rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
+    gint8 rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
     if (rc != SQLITE_OK ) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
         sqlite3_free(err_msg);        
         sqlite3_close(db);
-        return -1;
+        return FALSE;
     } 
-    return 0; 
+    return TRUE; 
 }
 
-size_t add_user_num(char *session_id, char *handle_id, char *user_num) {
+gboolean add_user_num(char *session_id, char *handle_id, char *user_num) {
     const char *sql = "UPDATE Stats_Info SET user_num='%s' "
         "WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
             user_num, session_id, handle_id);
     printf("Buffer: %s\n", sql_buffer);
-    size_t rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
+    gboolean rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
     if (rc != SQLITE_OK ) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
         sqlite3_free(err_msg);        
         sqlite3_close(db);
-        return -1;
+        return FALSE;
     } 
-    return 0; 
+    return TRUE; 
 }
 
-size_t get_user_info(char *session_id, char *handle_id, user_info *user) {
+gint8 get_user_info(char *session_id, char *handle_id, user_info *user) {
     const char *sql = "SELECT * FROM Stats_Info WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
             session_id, handle_id);
     printf("Buffer: %s\n", sql_buffer);
     sqlite3_stmt *stmt;
-    size_t rc = sqlite3_prepare_v2(db, sql_buffer, -1, &stmt, NULL);
+    gint8 rc = sqlite3_prepare_v2(db, sql_buffer, -1, &stmt, NULL);
     if (rc != SQLITE_OK ) {
         
         fprintf(stderr, "Failed to prepare SQL statement.\n");
@@ -212,8 +212,10 @@ size_t get_user_info(char *session_id, char *handle_id, user_info *user) {
         
         return -1;
     }  
-    
+    gint8 rows = 0;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        ++rows;
+        
         const char *res = sqlite3_column_text(stmt, 0);
         user->user_num = malloc(strlen(res) + 1);
         strcpy(user->user_num, res);
@@ -280,28 +282,28 @@ size_t get_user_info(char *session_id, char *handle_id, user_info *user) {
     
     sqlite3_finalize(stmt);
     
-    return 0;
+    return rows;
 }
 
-size_t remove_user(char *session_id, char *handle_id) {
+gboolean remove_user(char *session_id, char *handle_id) {
     const char *sql = "DELETE FROM Stats_Info "
                       "WHERE session_id='%s' AND handle_id='%s';";
     char sql_buffer[BUFFER_SIZE_SQLITE];
     snprintf(sql_buffer, sizeof(sql_buffer), sql, 
              session_id, handle_id);
     printf("Buffer: %s\n", sql_buffer);
-    size_t rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
+    gint8 rc = sqlite3_exec(db, sql_buffer, 0, 0, &err_msg);
     if (rc != SQLITE_OK ) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
         sqlite3_free(err_msg);        
         sqlite3_close(db);
-        return -1;
+        return FALSE;
     } 
-    return 0; 
+    return TRUE; 
 }
 
-size_t close_db(void) {
-    size_t rc = sqlite3_close(db);
+gboolean close_db(void) {
+    gboolean rc = sqlite3_close(db);
     if (rc != SQLITE_OK ) {
         sqlite3_free(err_msg);
         fprintf(stderr, "SQL error: %s\n", err_msg);

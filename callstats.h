@@ -16,23 +16,24 @@
 #define BUFFER_SIZE  (10 * 1024)  /* 10 KB */
 
 // function prototypes
-static size_t write_response(void *, size_t, size_t, void *);
+static gint64 write_response(void *, gint64, gint64, void *);
 char *callstats_authenticate(char *);
-char *callstats_user_joined (user_info *, long long);
-size_t callstats_user_left(user_info *, long long);
-size_t callstats_fabric_setup(user_info *, long long);
-size_t callstats_conf_stats(user_info *, long long);
+char *callstats_user_joined (user_info *, gint64);
+gboolean callstats_user_alive(user_info *, gint64);
+gboolean callstats_user_left(user_info *, gint64);
+gboolean callstats_fabric_setup(user_info *, gint64);
+gboolean callstats_conf_stats(user_info *, gint64);
 
 // function definitions
 
 struct write_result {
     char *data;
-    int pos;
+    gint64 pos;
 };
 
 typedef struct write_result write_result; 
 
-static size_t write_response(void *ptr, size_t size, size_t nmemb, void *stream) {
+static gint64 write_response(void *ptr, gint64 size, gint64 nmemb, void *stream) {
     write_result *result = (struct write_result *)stream;
     
     if(result->pos + size * nmemb >= BUFFER_SIZE - 1)
@@ -103,7 +104,7 @@ char *callstats_authenticate(char *user_id) {
     // form data buffer 
     char form_data_buffer [BUFFER_SIZE];
     snprintf(form_data_buffer, sizeof(form_data_buffer), form_format, jwt_string, user_id, APP_ID);
-    printf("Form Data Buffer: %s\n", form_data_buffer);
+    //printf("Form Data Buffer: %s\n", form_data_buffer);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, form_data_buffer);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_response);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
@@ -141,7 +142,7 @@ char *callstats_authenticate(char *user_id) {
     const char *val = json_string_value(json_access_token);
     char *access_token = (char *) malloc(strlen(val) + 1);
     strcpy(access_token, val);
-    printf("Access Token Converted: %s\n", access_token);
+    //printf("Access Token Converted: %s\n", access_token);
     
     error:
     if (response) 
@@ -161,12 +162,12 @@ char *callstats_authenticate(char *user_id) {
     return access_token;
 }
 
-char *callstats_user_joined (user_info *user, long long timestamp) {
+char *callstats_user_joined (user_info *user, gint64 timestamp) {
     // preparing url for posting payload
     const char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s";
     char url_buffer[BUFFER_SIZE];
     snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id);
-    printf("callstats_user_joined Buffer: %s\n", url_buffer);
+    //printf("callstats_user_joined Buffer: %s\n", url_buffer);
     
     // preparing payload
     json_t *json_payload = json_object();
@@ -223,7 +224,7 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     const char *auth_format = "Authorization: Bearer %s";
     char auth_string[BUFFER_SIZE];
     snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
-    printf("authorization: %s\n", auth_string);
+    //printf("authorization: %s\n", auth_string);
     headers = curl_slist_append(headers, auth_string);
     // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -294,24 +295,13 @@ char *callstats_user_joined (user_info *user, long long timestamp) {
     return uc_id;
 }
 
-/*
- * j *son_t userAlive(char* appID, char* confID, char* ucID ,
- * char* token, json_t req) {
- * char* format =
- * "https://events.callstats.io/v1/apps/%s/conferences/%s/%s/events/user/alive";
- *   char* url = (char *) malloc(1 + strlen(front)+ strlen(appID)
- *   + strlen(mid) + strlen(confID) + strlen(ucID));
- *   snprintf(url, sizeof(url), format, appID, confID, ucID);
- *   free(url);
- *   }
- */
-size_t callstats_user_alive(user_info *user, long long timestamp) {
+gboolean callstats_user_alive(user_info *user, gint64 timestamp) {
     // preparing url for posting payload
     
     const char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s/%s/events/user/alive";
     char url_buffer[BUFFER_SIZE];
     snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id, user->uc_id);
-    printf("callstats_user_left Buffer: %s\n", url_buffer);
+    //printf("callstats_user_alive Buffer: %s\n", url_buffer);
     
     // preparing payload
     json_t *json_payload = json_object();
@@ -321,7 +311,7 @@ size_t callstats_user_alive(user_info *user, long long timestamp) {
     
     // stringifying payload
     char *string_payload = json_dumps(json_payload, JSON_ENCODE_ANY); 
-    printf("user_left payload: %s \n", string_payload);
+    printf("user_alive payload: %s \n", string_payload);
     
     CURL *curl = NULL;                                      
     CURLcode status;
@@ -329,8 +319,8 @@ size_t callstats_user_alive(user_info *user, long long timestamp) {
     char *data = NULL;
     long code = 0;
     
-    // msg=0 means success, msg!=0 means failure
-    size_t msg = 1;
+    // msg=TRUE means success, msg=FALSE means failure
+    gboolean msg = FALSE;
     
     json_error_t err;
     
@@ -367,7 +357,7 @@ size_t callstats_user_alive(user_info *user, long long timestamp) {
     const char *auth_format = "Authorization: Bearer %s";
     char auth_string[BUFFER_SIZE];
     snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
-    printf("authorization: %s\n", auth_string);
+    //printf("authorization: %s\n", auth_string);
     headers = curl_slist_append(headers, auth_string);
     // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -387,7 +377,7 @@ size_t callstats_user_alive(user_info *user, long long timestamp) {
     
     // zero-terminate the result
     data[res.pos] = '\0';
-    printf("user_left Response: %s\n", data);
+    printf("user_alive Response: %s\n", data);
     
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
     if(code != 200) {
@@ -416,7 +406,7 @@ size_t callstats_user_alive(user_info *user, long long timestamp) {
     }
     
     if (strcmp(result , "success") == 0) {
-        msg = 0; 
+        msg = TRUE; 
     }
     
     error:
@@ -438,13 +428,13 @@ size_t callstats_user_alive(user_info *user, long long timestamp) {
     return msg;
 }
 
-size_t callstats_user_left(user_info *user, long long timestamp) {
+gboolean callstats_user_left(user_info *user, gint64 timestamp) {
     // preparing url for posting payload
     
     const char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s/%s/events/user/left";
     char url_buffer[BUFFER_SIZE];
     snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id, user->uc_id);
-    printf("callstats_user_left Buffer: %s\n", url_buffer);
+    //printf("callstats_user_left Buffer: %s\n", url_buffer);
     
     // preparing payload
     json_t *json_payload = json_object();
@@ -462,8 +452,8 @@ size_t callstats_user_left(user_info *user, long long timestamp) {
     char *data = NULL;
     long code = 0;
     
-    // msg=0 means success, msg!=0 means failure
-    size_t msg = 1;
+    // msg=TRUE means success, msg=FALSE means failure
+    gboolean msg = FALSE;
     
     json_error_t err;
     
@@ -500,7 +490,7 @@ size_t callstats_user_left(user_info *user, long long timestamp) {
     const char *auth_format = "Authorization: Bearer %s";
     char auth_string[BUFFER_SIZE];
     snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
-    printf("authorization: %s\n", auth_string);
+    //printf("authorization: %s\n", auth_string);
     headers = curl_slist_append(headers, auth_string);
     // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -549,7 +539,7 @@ size_t callstats_user_left(user_info *user, long long timestamp) {
     }
     
     if (strcmp(result , "success") == 0) {
-        msg = 0; 
+        msg = TRUE;
     }
     
     error:
@@ -571,12 +561,12 @@ size_t callstats_user_left(user_info *user, long long timestamp) {
     return msg;
 }   
 
-size_t callstats_fabric_setup(user_info *user, long long timestamp) {
+gboolean callstats_fabric_setup(user_info *user, gint64 timestamp) {
     // preparing url for posting payload
     const char* url = "https://events.callstats.io/v1/apps/%s/conferences/%s/%s/events/fabric";
     char url_buffer[BUFFER_SIZE];
     snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id, user->uc_id);
-    printf("callstats_fabric_setup Buffer: %s\n", url_buffer);
+    //printf("callstats_fabric_setup Buffer: %s\n", url_buffer);
     
     // preparing payload
     json_t *json_payload = json_object();
@@ -597,8 +587,8 @@ size_t callstats_fabric_setup(user_info *user, long long timestamp) {
     char *data = NULL;
     long code = 0;
     
-    // msg=0 means success, msg!=0 means failure
-    size_t msg = 1;
+    // msg=TRUE means success, msg=FALSE means failure
+    gboolean msg = FALSE;
     
     json_error_t err;
     
@@ -635,7 +625,7 @@ size_t callstats_fabric_setup(user_info *user, long long timestamp) {
     const char *auth_format = "Authorization: Bearer %s";
     char auth_string[BUFFER_SIZE];
     snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
-    printf("authorization: %s\n", auth_string);
+    //printf("authorization: %s\n", auth_string);
     headers = curl_slist_append(headers, auth_string);
     // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -684,7 +674,7 @@ size_t callstats_fabric_setup(user_info *user, long long timestamp) {
     }
     
     if (strcmp(result , "success") == 0) {
-        msg = 0; 
+        msg = TRUE; 
     }
     
     error:
@@ -706,13 +696,13 @@ size_t callstats_fabric_setup(user_info *user, long long timestamp) {
     return msg;
 } 
 
-size_t callstats_conf_stats(user_info *user, long long timestamp) {
+gboolean callstats_conf_stats(user_info *user, gint64 timestamp) {
     // preparing url for posting payload
     
     const char* url = "https://stats.callstats.io/v1/apps/%s/conferences/%s/%s/events/stats";
     char url_buffer[BUFFER_SIZE];
     snprintf(url_buffer, BUFFER_SIZE, url, APP_ID, user->conf_id, user->uc_id);
-    printf("callstats_conf_stats Buffer: %s\n", url_buffer);
+    //printf("callstats_conf_stats Buffer: %s\n", url_buffer);
     
     // preparing payload
     json_t *json_payload = json_object();
@@ -732,9 +722,8 @@ size_t callstats_conf_stats(user_info *user, long long timestamp) {
     char *data = NULL;
     long code = 0;
     
-    // msg=0 means success, msg!=0 means failure
-    size_t msg = 1;
-    
+    // msg=TRUE means success, msg=FALSE means failure
+    gboolean msg = FALSE;
     json_error_t err;
     
     // response will later store server's response
@@ -770,7 +759,7 @@ size_t callstats_conf_stats(user_info *user, long long timestamp) {
     const char *auth_format = "Authorization: Bearer %s";
     char auth_string[BUFFER_SIZE];
     snprintf(auth_string, BUFFER_SIZE, auth_format, user->token);
-    printf("authorization: %s\n", auth_string);
+//     printf("authorization: %s\n", auth_string);
     headers = curl_slist_append(headers, auth_string);
     // set headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -819,7 +808,7 @@ size_t callstats_conf_stats(user_info *user, long long timestamp) {
     }
     
     if (strcmp(result , "success") == 0) {
-        msg = 0; 
+        msg = TRUE; 
     }
     
     error:
